@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
+import type { Product } from "@/types/product";
 
 // Types
 interface ProductMatch {
@@ -7,9 +8,16 @@ interface ProductMatch {
   reason: string;
 }
 
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 interface RequestBody {
-  products: any[];
+  products: Product[];
   userRequirements: string;
+  chatHistory: Message[];
+  contextProperties: Product[];
 }
 
 // Initialize Gemini
@@ -17,56 +25,77 @@ if (!process.env.GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY is not set');
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || "");
 
 export async function POST(request: Request) {
   try {
-    // Input validation
-    const body = await request.json() as RequestBody;
-    if (!body.products || !Array.isArray(body.products) || !body.userRequirements) {
-      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-    }
+    const body: RequestBody = await request.json();
+    const { products, userRequirements, chatHistory, contextProperties } = body;
 
-    // Structure prompt
-    const prompt = `
-      Task: Analyze properties and match user requirements.
-      Properties: ${JSON.stringify(body.products)}
-      Requirements: ${body.userRequirements}
-      
-      Instructions:
-      1. Consider price, location, features, and amenities
-      2. Return only properties that closely match requirements
-      3. Provide brief explanation for each match
-      
-      Response format (strict JSON array):
-      [{"id": "propertyId", "reason": "explanation"}]
-      
-      Maximum 5 matches.
-    `;
-
-    // Generate response
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
 
-    // Validate response
-    let matches: ProductMatch[];
-    try {
-      matches = JSON.parse(text);
-      if (!Array.isArray(matches) || !matches.every(m => m.id && m.reason)) {
-        throw new Error("Invalid response format");
+    // If this is the first message (no chat history), perform property search
+    if (chatHistory.length <= 1) {
+      const prompt = `You are a real estate expert. Analyze these properties and find matches based on the user's requirements. 
+      Return exactly 3 best matching properties if possible.
+      
+      User Requirements: ${userRequirements}
+
+      Available Properties:
+      ${JSON.stringify(products, null, 2)}
+
+      Return the response in the following JSON format:
+      {
+        "matches": [
+          {
+            "id": "property_id",
+            "reason": "Explanation of why this property matches",
+            "confidence": 0.95
+          }
+        ]
       }
-    } catch {
-      return NextResponse.json({ error: "Invalid AI response" }, { status: 500 });
+      
+      Only return the JSON, no other text.`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      // Parse the JSON response
+      const matches = JSON.parse(text).matches;
+
+      return NextResponse.json({ matches });
+    } 
+    // For follow-up questions, provide conversational responses
+    else {
+      const contextPropertiesInfo = contextProperties.map(prop => 
+        `Property ${prop.id}: ${prop.name} - Price: $${prop.price} - ${prop.description || ''}`
+      ).join('\n');
+
+      const prompt = `You are a helpful real estate expert assistant. Use the following context to answer the user's question.
+      
+      Context Properties:
+      ${contextPropertiesInfo}
+
+      Previous Conversation:
+      ${chatHistory.slice(0, -1).map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+
+      Current Question: ${userRequirements}
+
+      Provide a helpful, natural response about the properties in context. If the question is about properties not in context,
+      politely ask the user to start a new property search with their requirements.`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      
+      return NextResponse.json({ 
+        response: response.text()
+      });
     }
-
-    return NextResponse.json({ matches });
-
   } catch (error) {
-    console.error("API Error:", error);
+    console.error('API Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Server error" }, 
+      { error: "Failed to process request" },
       { status: 500 }
     );
   }

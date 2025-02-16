@@ -35,7 +35,7 @@ export default function HomePageComponent() {
 
   // Filter states
   const [filters, setFilters] = useState<FilterState>({
-    priceRange: [0, 2000000],
+    priceRange: [0, 20000000],
     categories: [],
     tags: [],
     minRating: 0,
@@ -52,7 +52,11 @@ export default function HomePageComponent() {
     const fetchUser = async () => {
       try {
         const userData = await account.get()
-        setUser(userData)
+        if (userData && userData.name && userData.email) {
+          setUser(userData)
+        } else {
+          setUser(null)
+        }
       } catch {
         setUser(null)
       } finally {
@@ -64,7 +68,7 @@ export default function HomePageComponent() {
 
   const clearAllFilters = () => {
     setFilters({
-      priceRange: [0, 2000000],
+      priceRange: [0, 20000000],
       categories: [],
       tags: [],
       minRating: 0,
@@ -108,7 +112,7 @@ export default function HomePageComponent() {
               <Link href="/" className="flex items-center space-x-2 hover:text-blue-600 transition-colors">
                 <Home className="h-6 w-6" />
                 <span className="text-xl font-semibold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
-                  EstateEase
+                 Estate Ease
                 </span>
               </Link>
               <nav className="hidden md:flex items-center space-x-6">
@@ -188,8 +192,8 @@ export default function HomePageComponent() {
             <Slider
               value={filters.priceRange}
               onValueChange={(value) => setFilters((prev) => ({ ...prev, priceRange: value as [number, number] }))}
-              max={2000000}
-              step={1000}
+              max={20000000}
+              step={10000}
               className="mb-4"
             />
             <div className="flex items-center gap-2">

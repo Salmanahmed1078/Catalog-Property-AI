@@ -14,7 +14,7 @@ export default function PropertyCard({ product }: PropertyCardProps) {
       <div className="bg-white/80 backdrop-blur-sm rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 border border-white/20">
         <div className="relative h-48">
           <Image
-            src={product.images[0] || "/placeholder.svg"}
+            src={product.images[0] || "/images/default.jpg"}
             alt={product.name}
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-300"
